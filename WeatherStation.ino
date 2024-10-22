@@ -6,6 +6,8 @@
 # include <DHT.h> // library to get data from DHT sensors
 #include <SPI.h>
 #include <SD.h>
+#include <Wire.h>
+#include <DS3231.h>
 
 // ----------------------------------------------------------------------------------------
 //                                  HARDWARE SETUP
@@ -16,53 +18,78 @@ const int dht_type = DHT11; // type of DHT sensor
 
 const int SD_pin = 10;      // Arduino Pin for CS Pin of SD card module
 
-float humidity;             
+float humidity;             // the shit I wanna measure
 float temperature;
 
+// ----------------------------------------------------------------------------------------
+//                                  CREATING OBJECTS
+// ----------------------------------------------------------------------------------------
+
 DHT dht(dht_pin, dht_type); // creating a DHT object
+DS3231 clock;
+RTCDateTime dt;
 
 
 void setup() {
 
 Serial.begin(9600);
 dht.begin();
+clock.begin();
+
+clock.setDateTime(__DATE__, __TIME__);
 
 SD.begin(SD_pin);
 File weatherData = SD.open("weather.csv",FILE_WRITE);
 
-// check if file has been opened successfully
-if(weatherData){
-// print the header (column names) of the dataset
-weatherData.println("Time,Temperature,Humidity");
-// close the data set
-weatherData.close();
-// and let everyone know on the serial monitor that it worked wuhu
-Serial.println("Data has been stored succesfully");
 
-}
+if(weatherData){                                    // check if file has been opened successfully
 
-else{
-  // if file has not been opened successfully please tell the people
-  Serial.println("Could not open");
-}
+weatherData.println("Time,Temperature,Humidity");   // print the header (column names) of the dataset
+
+weatherData.close();                                // close the data set
 
 
 }
 
 
+
+}
 
 
 void loop() {
-delay(5000);        // the sensor is a bit slow in measuring
+
+dt = clock.getDateTime();
 
 humidity = dht.readHumidity();
 temperature = dht.readTemperature();
 
-Serial.print("Humidity:");
-Serial.print(humidity);
-Serial.println(" %");
-Serial.print("Temperature:");
-Serial.print(temperature);
-Serial.println(" degrees");
+File weatherData = SD.open("weather.csv",FILE_WRITE);
+
+if (weatherData){
+weatherData.print(dt.year);
+weatherData.print("-");
+weatherData.print(dt.month <10? "0": "");
+weatherData.print(dt.month);
+weatherData.print("-");
+weatherData.print(dt.day <10? "0": "");
+weatherData.print(dt.day);
+weatherData.print(" ");
+weatherData.print(dt.hour <10? "0": "");
+weatherData.print(dt.hour);
+weatherData.print(":");
+weatherData.print(dt.minute <10? "0": "");
+weatherData.print(dt.minute);
+weatherData.print(":");
+weatherData.print(dt.second <10? "0": "");
+weatherData.print(dt.second);
+weatherData.print(",");
+weatherData.print(temperature);
+weatherData.print(",");
+weatherData.println(humidity);
+weatherData.close();
+  
+}
+
+delay(5000);                                        // sensor is slow with measuring
 
 }
