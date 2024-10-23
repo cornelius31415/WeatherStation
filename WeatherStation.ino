@@ -14,13 +14,18 @@
 //                                  HARDWARE SETUP
 // ----------------------------------------------------------------------------------------
 
-const int dht_pin = 2;       // sensor will be attached to pin 2 on Arduino
-const int dht_type = DHT11; // type of DHT sensor
+const int dht11_pin = 2;       // sensor will be attached to pin 2 on Arduino
+const int dht11_type = DHT11; // type of DHT sensor
+const int dht22_pin = 4;
+const int dht22_type = DHT22;
 
 const int SD_pin = 10;      // Arduino Pin for CS Pin of SD card module
 
-float humidity;             // the shit I wanna measure
-float temperatureDHT;
+float humidityDHT11;             // the shit I wanna measure
+float temperatureDHT11;
+float humidityDHT22;             
+float temperatureDHT22;
+
 float temperatureBMP1;
 float pressure1;
 float altitude1;
@@ -31,7 +36,8 @@ float altitude2;
 //                                  CREATING OBJECTS
 // ----------------------------------------------------------------------------------------
 
-DHT dht(dht_pin, dht_type); // creating a DHT object
+DHT dht11(dht11_pin, dht11_type); // creating a DHT object
+DHT dht22(dht22_pin, dht22_type);
 DS3231 clock;
 RTCDateTime dt;
 Adafruit_BMP280 bmp1;
@@ -39,7 +45,8 @@ Adafruit_BMP280 bmp2;
 
 void setup() {
 
-dht.begin();
+dht11.begin();
+dht22.begin();
 clock.begin();
 bmp1.begin(0x76);
 bmp2.begin(0x77);
@@ -52,7 +59,8 @@ File weatherData = SD.open("weather.csv",FILE_WRITE);
 
 if(weatherData){                                    // check if file has been opened successfully
 
-weatherData.println("Time,Temperature DHT,Humidity DHT (%), Temperature BMP1, Pressure BMP1 (hPa),"
+weatherData.println("Time,Temperature DHT11,Humidity DHT11 (%),Temperature DHT22,Humidity DHT22 (%),"
+                    "Temperature BMP1, Pressure BMP1 (hPa),"
                     "Altitude BMP1 (m),Temperature BMP2, Pressure BMP2 (hPa), Altitude BMP2 (m)");   // print the header (column names) of the dataset
 
 weatherData.close();                                // close the data set
@@ -83,12 +91,16 @@ void loop() {
 
 dt = clock.getDateTime();
 
-humidity = dht.readHumidity();
-temperatureDHT = dht.readTemperature();
+humidityDHT11 = dht11.readHumidity();
+temperatureDHT11 = dht11.readTemperature();
+humidityDHT22 = dht22.readHumidity();
+temperatureDHT22 = dht22.readTemperature();
 delay(100);
+
 temperatureBMP1 = bmp1.readTemperature();
 pressure1 = bmp1.readPressure()/100.0;
 altitude1 = bmp1.readAltitude();
+delay(10);
 temperatureBMP2 = bmp2.readTemperature();
 pressure2 = bmp2.readPressure()/100.0;
 altitude2 = bmp2.readAltitude();
@@ -117,9 +129,15 @@ weatherData.print(dt.second);
 weatherData.print(",");
 
 // data from DHT11 sensor
-weatherData.print(temperatureDHT);
+weatherData.print(temperatureDHT11);
 weatherData.print(",");
-weatherData.print(humidity);
+weatherData.print(humidityDHT11);
+weatherData.print(",");
+
+// data from DHT22 sensor
+weatherData.print(temperatureDHT22);
+weatherData.print(",");
+weatherData.print(humidityDHT22);
 weatherData.print(",");
 
 // data from first BMP280 sensor
