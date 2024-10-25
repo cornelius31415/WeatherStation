@@ -79,6 +79,7 @@ SD.begin(SD_pin);
 File weatherData = SD.open("weather.csv",FILE_WRITE);
 
 
+
 if(weatherData){                                    // check if file has been opened successfully
 
 weatherData.println(F("Time,Temperature DHT11,Humidity DHT11 (%),Temperature DHT22,Humidity DHT22 (%),"
