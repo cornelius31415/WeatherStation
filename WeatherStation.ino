@@ -16,16 +16,16 @@
 //                                  HARDWARE SETUP
 // ----------------------------------------------------------------------------------------
 
-const unsigned int dht11_pin = 2;       // sensor will be attached to pin 2 on Arduino
+const byte dht11_pin = 2;       // sensor will be attached to pin 2 on Arduino
 const unsigned int dht11_type = DHT11; // type of DHT sensor
-const unsigned int dht22_pin = 4;
+const byte dht22_pin = 4;
 const unsigned int dht22_type = DHT22;
 
-const int SD_pin = 10;      // Arduino Pin for CS Pin of SD card module
+const byte SD_pin = 10;      // Arduino Pin for CS Pin of SD card module
 
-float humidityDHT11;             // the shit I wanna measure
+byte humidityDHT11;             // the shit I wanna measure
 float temperatureDHT11;
-float humidityDHT22;             
+byte humidityDHT22;             
 float temperatureDHT22;
 
 float temperatureBMP1;
@@ -40,7 +40,7 @@ float altitude2;
 // ----------------------------------------------------------------------------------------
 
 // defining the degree symbol, because it does not exist in the LCD screen
-byte degreeSymbol[8]={
+const byte degreeSymbol[8] PROGMEM  ={
   B00111,
   B00101,
   B00111,
@@ -79,7 +79,13 @@ void setup() {
     // setting up the LCD screen
     lcd.begin(16,2);
     lcd.backlight();  
-    lcd.createChar(1,degreeSymbol);
+    // getting the degree symbol from flash memory and putting into RAM to work with it
+    byte degreeSymbolBuffer[8];
+    for (int i=0; i<8; i++){
+        degreeSymbolBuffer[i] = pgm_read_byte(&degreeSymbol[i]);
+    }
+    
+    lcd.createChar(1,degreeSymbolBuffer);
 
     // setting up the DHT sensors
     dht11.begin();
