@@ -17,9 +17,9 @@
 // ----------------------------------------------------------------------------------------
 
 const byte dht11_pin = 2;       // sensor will be attached to pin 2 on Arduino
-const unsigned int dht11_type = DHT11; // type of DHT sensor
+const byte dht11_type = DHT11; // type of DHT sensor
 const byte dht22_pin = 4;
-const unsigned int dht22_type = DHT22;
+const byte dht22_type = DHT22;
 
 const byte SD_pin = 10;      // Arduino Pin for CS Pin of SD card module
 
@@ -40,7 +40,7 @@ float altitude2;
 // ----------------------------------------------------------------------------------------
 
 // defining the degree symbol, because it does not exist in the LCD screen
-const byte degreeSymbol[8] PROGMEM  ={
+const byte degreeSymbol[8] PROGMEM  = {
   B00111,
   B00101,
   B00111,
@@ -84,7 +84,6 @@ void setup() {
     for (int i=0; i<8; i++){
         degreeSymbolBuffer[i] = pgm_read_byte(&degreeSymbol[i]);
     }
-    
     lcd.createChar(1,degreeSymbolBuffer);
 
     // setting up the DHT sensors
@@ -184,29 +183,23 @@ void printLCD(){
   
     // printing the temperature and the pressure from the BMP280 sensor
     // and the humidity from the DHT22 sensor
-
+    
     // temperature
     lcd.setCursor(0,0);
     lcd.print(F("T:"));
-    lcd.setCursor(2,0);
     lcd.print(temperatureBMP2);
-    lcd.setCursor(7,0);
     lcd.write(1);
-    lcd.setCursor(8,0);
     lcd.print(F("C"));
 
     // humidity
     lcd.setCursor(11,0);
     lcd.print(F("H:"));
-    lcd.setCursor(13,0);
     lcd.print(round(humidityDHT22));
-    lcd.setCursor(15,0);
     lcd.print(F("%"));
 
     // pressure
     lcd.setCursor(0,1);
     lcd.print(F("P:"));
-    lcd.setCursor(2,1);
     lcd.print(pressure2);
     lcd.setCursor(9,1);
     lcd.print(F("hPa"));
