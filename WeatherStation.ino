@@ -146,7 +146,7 @@ void loop() {
     
     printLCD();                       // also print part of the data on the LCD screen
     
-    delay(2000);                      // waiting time till next measurement
+    delay(60000);                      // waiting time till next measurement
 
 }
 
