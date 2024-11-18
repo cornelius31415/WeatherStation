@@ -92,7 +92,7 @@ void setup() {
     
     // setting up the time module
     clock.begin();
-    clock.setDateTime(__DATE__, __TIME__);
+    // clock.setDateTime(__DATE__, __TIME__);
     
     //setting up and configuring the BMP280 sensors
     bmp1.begin(0x76);
