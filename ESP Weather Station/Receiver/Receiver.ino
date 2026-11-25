@@ -1,135 +1,186 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <TFT_eSPI.h>
 
-// ================= LCD =================
+TFT_eSPI tft = TFT_eSPI();
 
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+#define WIFI_CHANNEL 1
 
-// ================= ESP NOW =================
+// ============================
+// Wetterdaten
+// ============================
 
-typedef struct struct_message {
-
+typedef struct {
   float bmpTemperature;
   float bmpPressure;
   float dhtHumidity;
   float dhtTemperature;
+} WeatherData;
 
-} struct_message;
+WeatherData weather;
 
-struct_message myData;
+bool received = false;
+unsigned long lastReceived = 0;
 
-QueueHandle_t dataQueue;
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
-// ================= CALLBACK =================
+// ============================
+// ESP-NOW Empfang
+// ============================
 
 void OnDataRecv(const esp_now_recv_info_t *info,
-                const uint8_t *incomingData, int len) {
+                const uint8_t *data, int len) {
 
-  if (len == sizeof(struct_message)) {
+  if (len != sizeof(WeatherData)) return;
 
-    struct_message receivedData;
+  portENTER_CRITICAL(&mux);
 
-    memcpy(&receivedData, incomingData, sizeof(receivedData));
+  memcpy(&weather, data, sizeof(weather));
+  received = true;
+  lastReceived = millis();
 
-    xQueueOverwrite(dataQueue, &receivedData);
-  }
+  portEXIT_CRITICAL(&mux);
 }
 
-// ================= SETUP =================
+// ============================
+// Display
+// ============================
+
+void drawLayout() {
+
+  tft.fillScreen(TFT_BLACK);
+
+  tft.fillRect(0, 0, 240, 40, TFT_NAVY);
+
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(36, 12);
+  tft.print("WETTERSTATION");
+
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_LIGHTGREY);
+
+  tft.setCursor(15, 53);
+  tft.print("AUSSENTEMPERATUR");
+
+  tft.setCursor(15, 127);
+  tft.print("LUFTFEUCHTIGKEIT");
+
+  tft.setCursor(15, 197);
+  tft.print("LUFTDRUCK");
+
+  tft.drawFastHLine(15, 115, 210, TFT_DARKGREY);
+  tft.drawFastHLine(15, 185, 210, TFT_DARKGREY);
+  tft.drawFastHLine(15, 285, 210, TFT_DARKGREY);
+}
+
+// ============================
+// Setup
+// ============================
 
 void setup() {
 
   Serial.begin(115200);
 
-  dataQueue = xQueueCreate(1, sizeof(struct_message));
+  tft.init();
+  tft.setRotation(0);
 
-  // ESP-NOW starten
+  drawLayout();
 
   WiFi.mode(WIFI_STA);
 
-  delay(1000);
+  esp_wifi_set_channel(
+    WIFI_CHANNEL,
+    WIFI_SECOND_CHAN_NONE
+  );
 
-  esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
-
-  Serial.print("Empfaenger MAC: ");
+  Serial.print("Receiver MAC: ");
   Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW Fehler");
-    while (true) {
-      delay(1000);
-    }
+    tft.setCursor(15, 300);
+    tft.print("ESP-NOW ERROR");
+    return;
   }
 
   esp_now_register_recv_cb(OnDataRecv);
-
-  Serial.println("Empfaenger bereit");
-
-  // LCD starten
-
-  Wire.begin(21, 22);
-
-  lcd.begin();
-  lcd.backlight();
-
-  lcd.setCursor(0, 0);
-  lcd.print("Wetterstation");
-
-  lcd.setCursor(0, 1);
-  lcd.print("Warte auf Daten...");
 }
 
-// ================= LOOP =================
+// ============================
+// Loop
+// ============================
 
 void loop() {
 
-  if (xQueueReceive(dataQueue, &myData, 0) == pdTRUE) {
+  WeatherData data;
+  bool hasData;
+  unsigned long last;
 
-    // LCD
+  portENTER_CRITICAL(&mux);
 
-    lcd.clear();
+  data = weather;
+  hasData = received;
+  last = lastReceived;
 
-    lcd.setCursor(0, 0);
-    lcd.print("BMP Temp: ");
-    lcd.print(myData.bmpTemperature, 1);
-    lcd.write(223);
-    lcd.print("C");
+  portEXIT_CRITICAL(&mux);
 
-    lcd.setCursor(0, 1);
-    lcd.print("DHT Temp: ");
-    lcd.print(myData.dhtTemperature, 1);
-    lcd.write(223);
-    lcd.print("C");
+  if (!hasData) {
 
-    lcd.setCursor(0, 2);
-    lcd.print("Humidity: ");
-    lcd.print(myData.dhtHumidity, 1);
-    lcd.print(" %");
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.setCursor(15, 300);
+    tft.print("WARTE AUF WETTERDATEN");
 
-    lcd.setCursor(0, 3);
-    lcd.print("Pressure: ");
-    lcd.print(myData.bmpPressure, 1);
-    lcd.print(" hPa");
-
-    // Serial Monitor
-
-    Serial.println("--------------------------");
-
-    Serial.print("BMP Temperatur: ");
-    Serial.println(myData.bmpTemperature);
-
-    Serial.print("DHT Temperatur: ");
-    Serial.println(myData.dhtTemperature);
-
-    Serial.print("Luftfeuchtigkeit: ");
-    Serial.println(myData.dhtHumidity);
-
-    Serial.print("Luftdruck: ");
-    Serial.println(myData.bmpPressure);
+    delay(1000);
+    return;
   }
 
-  delay(100);
-} 
+  // Temperatur
+
+  tft.setTextSize(4);
+  tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  tft.setCursor(15, 75);
+  tft.printf("%5.1f C ", data.dhtTemperature);
+
+  // Luftfeuchtigkeit
+
+  tft.setTextSize(4);
+  tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  tft.setCursor(15, 148);
+  tft.printf("%5.1f %% ", data.dhtHumidity);
+
+  // Luftdruck
+
+  float pressure = data.bmpPressure;
+
+  // Falls Druck in Pascal gesendet wird
+  if (pressure > 2000) pressure /= 100.0;
+
+  tft.setTextSize(3);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(15, 220);
+  tft.printf("%.1f hPa  ", pressure);
+
+  // BMP280 Temperatur
+
+  tft.setTextSize(2);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  tft.setCursor(15, 258);
+  tft.printf("BMP280: %.1f C  ", data.bmpTemperature);
+
+  // Zeit seit letztem Empfang
+
+  unsigned long seconds = (millis() - last) / 1000;
+
+  tft.setTextSize(1);
+  tft.setTextColor(
+    seconds < 120 ? TFT_GREEN : TFT_RED,
+    TFT_BLACK
+  );
+
+  tft.setCursor(15, 300);
+  tft.printf("LETZTER EMPFANG: %lu s     ", seconds);
+
+  delay(1000);
+}
