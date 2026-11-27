@@ -2,10 +2,18 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <TFT_eSPI.h>
+#include <DHT.h>
 
-TFT_eSPI tft = TFT_eSPI();
+// ============================
+// Einstellungen
+// ============================
 
 #define WIFI_CHANNEL 1
+#define DHT_PIN 27
+#define DHT_TYPE DHT22
+
+TFT_eSPI tft = TFT_eSPI();
+DHT dht(DHT_PIN, DHT_TYPE);
 
 // ============================
 // Wetterdaten
@@ -20,8 +28,13 @@ typedef struct {
 
 WeatherData weather;
 
+float indoorTemperature = NAN;
+float indoorHumidity = NAN;
+
 bool received = false;
+
 unsigned long lastReceived = 0;
+unsigned long lastDHT = 0;
 
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -37,6 +50,7 @@ void OnDataRecv(const esp_now_recv_info_t *info,
   portENTER_CRITICAL(&mux);
 
   memcpy(&weather, data, sizeof(weather));
+
   received = true;
   lastReceived = millis();
 
@@ -44,35 +58,35 @@ void OnDataRecv(const esp_now_recv_info_t *info,
 }
 
 // ============================
-// Display
+// Display Layout
 // ============================
 
 void drawLayout() {
 
   tft.fillScreen(TFT_BLACK);
 
-  tft.fillRect(0, 0, 240, 40, TFT_NAVY);
+  tft.fillRect(0, 0, 240, 34, TFT_NAVY);
 
-  tft.setTextColor(TFT_WHITE);
   tft.setTextSize(2);
-  tft.setCursor(36, 12);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(36, 9);
   tft.print("WETTERSTATION");
 
   tft.setTextSize(1);
   tft.setTextColor(TFT_LIGHTGREY);
 
-  tft.setCursor(15, 53);
-  tft.print("AUSSENTEMPERATUR");
+  tft.setCursor(12, 45);
+  tft.print("AUSSEN");
 
-  tft.setCursor(15, 127);
-  tft.print("LUFTFEUCHTIGKEIT");
+  tft.setCursor(12, 141);
+  tft.print("INNEN");
 
-  tft.setCursor(15, 197);
+  tft.setCursor(12, 237);
   tft.print("LUFTDRUCK");
 
-  tft.drawFastHLine(15, 115, 210, TFT_DARKGREY);
-  tft.drawFastHLine(15, 185, 210, TFT_DARKGREY);
-  tft.drawFastHLine(15, 285, 210, TFT_DARKGREY);
+  tft.drawFastHLine(10, 130, 220, TFT_DARKGREY);
+  tft.drawFastHLine(10, 226, 220, TFT_DARKGREY);
+  tft.drawFastHLine(10, 289, 220, TFT_DARKGREY);
 }
 
 // ============================
@@ -83,8 +97,10 @@ void setup() {
 
   Serial.begin(115200);
 
+  dht.begin();
+
   tft.init();
-  tft.setRotation(0);
+  tft.setRotation(2);
 
   drawLayout();
 
@@ -99,8 +115,7 @@ void setup() {
   Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
-    tft.setCursor(15, 300);
-    tft.print("ESP-NOW ERROR");
+    Serial.println("ESP-NOW ERROR");
     return;
   }
 
@@ -112,6 +127,18 @@ void setup() {
 // ============================
 
 void loop() {
+
+  // Innensensor alle 2,5 Sekunden auslesen
+
+  if (millis() - lastDHT >= 2500) {
+
+    indoorTemperature = dht.readTemperature();
+    indoorHumidity = dht.readHumidity();
+
+    lastDHT = millis();
+  }
+
+  // Empfangene Daten kopieren
 
   WeatherData data;
   bool hasData;
@@ -125,62 +152,95 @@ void loop() {
 
   portEXIT_CRITICAL(&mux);
 
-  if (!hasData) {
-
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_RED, TFT_BLACK);
-    tft.setCursor(15, 300);
-    tft.print("WARTE AUF WETTERDATEN");
-
-    delay(1000);
-    return;
-  }
-
-  // Temperatur
-
-  tft.setTextSize(4);
-  tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-  tft.setCursor(15, 75);
-  tft.printf("%5.1f C ", data.dhtTemperature);
-
-  // Luftfeuchtigkeit
+  // ==========================
+  // Aussentemperatur
+  // ==========================
 
   tft.setTextSize(4);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.setCursor(15, 148);
-  tft.printf("%5.1f %% ", data.dhtHumidity);
+  tft.setCursor(12, 65);
 
+  if (hasData)
+    tft.printf("%5.1f C  ", data.dhtTemperature);
+  else
+    tft.print(" --.- C  ");
+
+  // Aussenluftfeuchtigkeit
+
+  tft.setTextSize(2);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(12, 105);
+
+  if (hasData)
+    tft.printf("Feuchte: %.1f %%  ", data.dhtHumidity);
+  else
+    tft.print("Feuchte: --.- %  ");
+
+  // ==========================
+  // Innentemperatur
+  // ==========================
+
+  tft.setTextSize(4);
+  tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+  tft.setCursor(12, 161);
+
+  if (!isnan(indoorTemperature))
+    tft.printf("%5.1f C  ", indoorTemperature);
+  else
+    tft.print(" --.- C  ");
+
+  // Innenluftfeuchtigkeit
+
+  tft.setTextSize(2);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setCursor(12, 201);
+
+  if (!isnan(indoorHumidity))
+    tft.printf("Feuchte: %.1f %%  ", indoorHumidity);
+  else
+    tft.print("Feuchte: --.- %  ");
+
+  // ==========================
   // Luftdruck
+  // ==========================
 
   float pressure = data.bmpPressure;
 
-  // Falls Druck in Pascal gesendet wird
-  if (pressure > 2000) pressure /= 100.0;
+  if (pressure > 2000)
+    pressure /= 100.0;
 
   tft.setTextSize(3);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setCursor(15, 220);
-  tft.printf("%.1f hPa  ", pressure);
+  tft.setCursor(12, 256);
 
-  // BMP280 Temperatur
+  if (hasData)
+    tft.printf("%.1f hPa  ", pressure);
+  else
+    tft.print("----.- hPa");
 
-  tft.setTextSize(2);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.setCursor(15, 258);
-  tft.printf("BMP280: %.1f C  ", data.bmpTemperature);
-
-  // Zeit seit letztem Empfang
-
-  unsigned long seconds = (millis() - last) / 1000;
+  // ==========================
+  // Empfangsstatus
+  // ==========================
 
   tft.setTextSize(1);
-  tft.setTextColor(
-    seconds < 120 ? TFT_GREEN : TFT_RED,
-    TFT_BLACK
-  );
+  tft.setCursor(12, 303);
 
-  tft.setCursor(15, 300);
-  tft.printf("LETZTER EMPFANG: %lu s     ", seconds);
+  if (hasData) {
 
-  delay(1000);
+    unsigned long seconds = (millis() - last) / 1000;
+
+    tft.setTextColor(
+      seconds < 120 ? TFT_GREEN : TFT_RED,
+      TFT_BLACK
+    );
+
+    tft.printf("LETZTER EMPFANG: %lu s    ", seconds);
+
+  } else {
+
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("WARTE AUF WETTERDATEN    ");
+  }
+
+  delay(500);
 }
